@@ -28,7 +28,7 @@ The repository is structured to allow direct code review within GitHub without n
 * `LoanLogic.bas` – The isolated core financial module compiled under strict variable declaration modes (`Option Explicit`).
 * `LoanInstallmentsScheduler.xlsm` – The macro-enabled Excel workbook containing the dashboard, user triggers, and the historical WIBOR database.
 
-## 📖 How to Run
+## How to Run
 To test the interactive elements of the calculator locally on your machine:
 1. Download the `LoanInstallmentsScheduler.xlsm` workbook from this repository.
 2. Open the file in Microsoft Excel and click **Enable Macros** / **Enable Content** on the top yellow warning bar.
