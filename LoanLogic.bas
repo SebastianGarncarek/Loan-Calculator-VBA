@@ -96,11 +96,15 @@ CalculateInterestRate = margin + averageRate 'total interest rate is the sum of 
         
 End Function
 
-Sub GenerateSchedule(principal As Currency, margin As Double, totalInstallments As Integer, dueDay As Integer, isFixedRate As Boolean)
+Sub GenerateSchedule(principal As Currency, margin As Double, totalInstallments As Integer, dueDay As Integer, startMonth As Integer, startYear As Integer, isFixedRate As Boolean)
 
 'Generates the credit repayment schedule table based on principal, bank margin, total installments, payment day, and rate type (fixed/floating)
 
 Application.ScreenUpdating = False 'disable screen updating to boost execution performance
+
+wksMain.Protect Password:="MAIN", UserInterfaceOnly:=True
+wksSchedule.Protect Password:="SCHEDULE", UserInterfaceOnly:=True
+
 wksSchedule.Cells.Clear 'clear the sheet before generating the table
 
 Dim Index As Integer
@@ -108,29 +112,38 @@ Dim installment As Currency
 Dim currentDate As Date
 Dim interestPaid As Currency
 Dim interestRate As Double
+Dim latestWiborDate As Double
+Dim lastWiborRow As Long
+
+lastWiborRow = wksWibor.Cells(wksWibor.Rows.Count, 1).End(xlUp).Row
+latestWiborDate = CDbl(wksWibor.Cells(lastWiborRow, 1).Value)
 
 interestRate = margin
-currentDate = DateSerial(2020, 1, dueDay) 'loan origin date is fixed to January 2020
+currentDate = DateSerial(startYear, startMonth, dueDay)
 
 With wksMain
-    .Range("C4:C8").ClearContents
+    .Range("DshStartDate").Value = ""
+    .Range("DshPrincipal").Value = ""
+    .Range("DshMargin").Value = ""
+    .Range("DshTerm").Value = ""
+    .Range("DshType").Value = ""
     
-    .Range("C4").Value = principal
-    .Range("C4").NumberFormat = "#,##0.00 ""PLN"""
+    .Range("DshStartDate").Value = DateSerial(startYear, startMonth, dueDay)
+    .Range("DshStartDate").NumberFormat = "dd/mm/yyyy"
     
-    .Range("C5").Value = margin
-    .Range("C5").NumberFormat = "0.00%"
+    .Range("DshPrincipal").Value = principal
+    .Range("DshPrincipal").NumberFormat = "#,##0.00 ""PLN"""
     
-    .Range("C6").Value = totalInstallments / 12
-    .Range("C6").NumberFormat = "0"
+    .Range("DshMargin").Value = margin
+    .Range("DshMargin").NumberFormat = "0.00%"
     
-    .Range("C7").Value = dueDay
-    .Range("C7").NumberFormat = "0"
+    .Range("DshTerm").Value = totalInstallments / 12
+    .Range("DshTerm").NumberFormat = "0"
     
     If isFixedRate Then
-        .Range("C8").Value = "Fixed (Margin only)"
+        .Range("DshType").Value = "Fixed (Margin only)"
     Else
-        .Range("C8").Value = "Floating (Margin + WIBOR)"
+        .Range("DshType").Value = "Floating (Margin + WIBOR)"
     End If
 End With
 
@@ -141,6 +154,7 @@ wksSchedule.Cells(1, 3).Value = "Installment Amount"
 wksSchedule.Cells(1, 4).Value = "Interest Paid"
 wksSchedule.Cells(1, 5).Value = "Principal Repaid"
 wksSchedule.Cells(1, 6).Value = "Remaining Balance"
+wksSchedule.Cells(1, 7).Value = "Rate Type (Source)"
 
 If (isFixedRate = True) Then installment = CalculateInstallment(principal, totalInstallments, margin) 'for fixed-rate loans, the installment is calculated only once
 
@@ -161,13 +175,24 @@ For Index = 1 To (totalInstallments)
     wksSchedule.Cells(Index + 1, 5).Value = installment - interestPaid
     principal = principal - (installment - interestPaid)
     wksSchedule.Cells(Index + 1, 6).Value = principal
+    
+    If isFixedRate Then
+        wksSchedule.Cells(Index + 1, 7).Value = "Fixed Rate"
+    ElseIf CDbl(currentDate) > latestWiborDate Then
+        wksSchedule.Cells(Index + 1, 7).Value = "Forecasted (Latest WIBOR)"
+    Else
+        wksSchedule.Cells(Index + 1, 7).Value = "Historical (60-day avg)"
+    End If
+    
+    wksSchedule.Range(wksSchedule.Cells(Index + 1, 3), wksSchedule.Cells(Index + 1, 6)).NumberFormat = "#,##0.00 ""PLN"""
 Next Index
 
+wksSchedule.UsedRange.EntireColumn.AutoFit
 Application.ScreenUpdating = True 're-enable screen updating after table generation completes
 
 End Sub
 
-Function UpcomingInstallment(principal As Currency, margin As Double, totalInstallments As Integer, dueDay As Integer, isFixedRate As Boolean) As Currency
+Function UpcomingInstallment(principal As Currency, margin As Double, totalInstallments As Integer, dueDay As Integer, startMonth As Integer, startYear As Integer, isFixedRate As Boolean) As Currency
 
 'Calculates the upcoming installment amount relative to today's date based on loan specifications
     
@@ -181,7 +206,7 @@ Dim Index As Integer
 
 today = Date
 interestRate = margin
-currentDate = DateSerial(2020, 1, dueDay)
+currentDate = DateSerial(startYear, startMonth, dueDay)
 
 If (isFixedRate = True) Then installment = CalculateInstallment(principal, totalInstallments, margin)
 
@@ -205,7 +230,7 @@ UpcomingInstallment = installment
 
 End Function
 
-Function UpcomingDueDate(totalInstallments As Integer, dueDay As Integer) As Date
+Function UpcomingDueDate(totalInstallments As Integer, dueDay As Integer, startMonth As Integer, startYear As Integer) As Date
 
 'Returns the due date for the upcoming loan installment based on the total terms and payment day
 
@@ -215,7 +240,7 @@ Dim isPeriodFound As Boolean 'flag indicating if the target payment window was i
 Dim Index As Integer
 
 today = Date
-currentDate = DateSerial(2020, 1, dueDay)
+currentDate = DateSerial(startYear, startMonth, dueDay)
 
 For Index = 1 To totalInstallments
     currentDate = DateAdd("m", 1, currentDate)
